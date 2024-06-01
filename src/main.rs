@@ -1,33 +1,44 @@
-use {http_req::error, http_req::request};
+use reqwest::{Proxy, Client};
+use select::document::Document;
+use select::predicate::Name;
 use std::env;
-use scraper;
 
-fn main() {
+#[tokio::main]
+async fn main() {
+    // Retrieve the command line arguments
     let args: Vec<String> = env::args().collect();
-    let site = &args[1];
-    let tag = &args[2];
-    println!("site:{}, tags:{}", &site, tag);
-    let result = scrape(site, tag);
-    println!("{:#?}", result.unwrap())
-}
+    if args.len() < 3 {
+        eprintln!("Usage: cargo run <url> <tags_comma_separated>");
+        return;
+    }
 
-fn scrape(url: &str, tag: &str) -> Result<Vec<String>, error::Error> {
-    let result = call(url);
-    let parsed = parse(&result?, tag);
-    return parsed
-}
+    let url = &args[1];
+    let tags: Vec<&str> = args[2].split(',').collect();
 
-fn parse(html: &str, tag: &str) -> Result<Vec<String>, error::Error> {
-    let document = scraper::Html::parse_document(html);
-    let selector = scraper::Selector::parse(tag).unwrap();
-    let content = document.select(&selector)
-                          .map(|element| element.inner_html())
-                          .collect::<Vec<_>>();
-    return Ok(content)
-}
+    // Create a reqwest client with SOCKS5 proxy pointing to TOR proxy port
+    let proxy = Proxy::all("socks5h://127.0.0.1:9050").expect("Failed to create proxy");
+    let client = Client::builder()
+        .proxy(proxy)
+        .build()
+        .expect("Failed to build client");
 
-fn call(url: &str) -> Result<String, error::Error> {
-   let mut response_body = Vec::new();
-   request::get(url, &mut response_body).map_err(|e| e)?;
-   Ok(String::from_utf8_lossy(&response_body).to_string())
+    // Fetch the content from the URL
+    let res = client
+        .get(url)
+        .send()
+        .await
+        .expect("Request failed")
+        .text()
+        .await
+        .expect("Failed to read response text");
+
+    // Parse the HTML document
+    let document = Document::from(res.as_str());
+
+    // Extract and print the contents of the specified tags
+    for tag in &tags {
+        for node in document.find(Name(*tag)) {
+            println!("<{}>: {}", tag, node.text());
+        }
+    }
 }
