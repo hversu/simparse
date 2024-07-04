@@ -1,6 +1,6 @@
 use reqwest::{Proxy, Client};
 use select::document::Document;
-use select::predicate::{Name, Any};
+use select::predicate::{Any};
 use std::env;
 
 #[tokio::main]
