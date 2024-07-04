@@ -1,6 +1,6 @@
 use reqwest::{Proxy, Client};
 use select::document::Document;
-use select::predicate::Name;
+use select::predicate::{Name, Any};
 use std::env;
 
 #[tokio::main]
@@ -36,9 +36,11 @@ async fn main() {
     let document = Document::from(res.as_str());
 
     // Extract and print the contents of the specified tags
-    for tag in &tags {
-        for node in document.find(Name(*tag)) {
-            println!("<{}>: {}", tag, node.text());
+    for node in document.find(Any) {
+        if let Some(tag) = node.name() {
+            if tags.contains(&tag.as_ref()) {
+                println!("<{}>: {}", tag, node.text());
+            }
         }
     }
 }
