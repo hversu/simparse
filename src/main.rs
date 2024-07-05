@@ -3,8 +3,16 @@ use select::document::Document;
 use select::predicate::Any;
 use std::env;
 use std::error::Error;
+use serde::{Serialize, Deserialize};
+use serde_json::json;
 
-pub async fn fetch_and_extract(url: &str, tags: Vec<&str>) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+#[derive(Serialize, Deserialize)]
+struct TagValuePair {
+    tag: String,
+    value: String,
+}
+
+pub async fn fetch_and_extract(url: &str, tags: Vec<&str>) -> Result<Vec<TagValuePair>, Box<dyn Error>> {
     // Create a reqwest client with SOCKS5 proxy pointing to TOR proxy port
     let proxy = Proxy::all("socks5h://127.0.0.1:9050")?;
     let client = Client::builder()
@@ -31,11 +39,17 @@ pub async fn fetch_and_extract(url: &str, tags: Vec<&str>) -> Result<Vec<(String
                     let parts: Vec<&str> = tag_spec.split('.').collect();
                     if parts.len() == 2 && tag == parts[0] {
                         if let Some(attr_value) = node.attr(parts[1]) {
-                            results.push((tag_spec.to_string(), attr_value.to_string()));
+                            results.push(TagValuePair {
+                                tag: tag_spec.to_string(),
+                                value: attr_value.to_string(),
+                            });
                         }
                     }
                 } else if tag == tag_spec {
-                    results.push((tag.to_string(), node.text()));
+                    results.push(TagValuePair {
+                        tag: tag.to_string(),
+                        value: node.text(),
+                    });
                 }
             }
         }
@@ -58,9 +72,11 @@ async fn main() {
 
     match fetch_and_extract(url, tags).await {
         Ok(results) => {
-            for (tag, text) in results {
-                println!("<{}>: {}", tag, text);
-            }
+            let json_results: Vec<_> = results.iter()
+                .map(|result| json!({ "tag": &result.tag, "value": &result.value }))
+                .collect();
+            
+            println!("{}", serde_json::to_string_pretty(&json_results).unwrap());
         },
         Err(err) => eprintln!("Error: {}", err),
     }
