@@ -1,5 +1,9 @@
 just a simple http request and scrape
 
+## config
+
+requires tor running on 9050
+
 ## usage
 `cargo run <url> <tag>`
 
